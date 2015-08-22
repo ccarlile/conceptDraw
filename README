@@ -1,0 +1,7 @@
+Python library for drawing concept maps.
+
+Essentiall a force-driven approach but uses some low-level semantic features 
+to add some concept-map specific functionality. Currently aiming to
+input a telerik xml file, build that into a happy, shiny data structure, and output
+a .ps file picture or a list of coordinates. Pure python libraries to be compatible
+with IronPython. Developed entirely on UNIX, har har
