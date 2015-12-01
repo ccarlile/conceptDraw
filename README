@@ -1,7 +1,8 @@
 Python library for drawing concept maps.
 
-Essentiall a force-driven approach but uses some low-level semantic features 
-to add some concept-map specific functionality. Currently aiming to
-input a telerik xml file, build that into a happy, shiny data structure, and output
-a .ps file picture or a list of coordinates. Pure python libraries to be compatible
-with IronPython. Developed entirely on UNIX, har har
+Requirements: Graphviz (specifically DOT), networkx,  matplotlib for plotting output.
+
+ConceptDraw has methods for adding nodes, edges, etc, that wrap the underlying networkx methods along with the associated semantic data. Nodes are grouped into "compound nodes" if they have an edge connected to them that has the same label and either the same source or same target as another edge. These compound nodes are treated as one node in an initial Sugiyama-style layout. Those nodes are later separated using the Force Scan algorithm, also credited to Sugiyama. Nodes added after the initial layout is completed are only drawn using the Force Scan algorithm.
+
+
+

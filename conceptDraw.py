@@ -3,13 +3,11 @@ from math import sqrt
 import networkx as nx
 import pygraphviz as pgv
 import matplotlib.pyplot as plt
-import networkx_viewer as nxv
 from subprocess import check_output
 from sys import argv
 
-# OK SO HERES THE STORY
 # This should be the final version of the concept drawing function. I'm going to leverage
-# several different libraries in the name of not fucking anything up myself, and to make
+# several different libraries in the name of not messing anything up myself, and to make
 # this whole thing slightly more readable. The general idea is as follows:
 # 1. Look ahead to the whole lession. Build a graph out of it. Lay it out using a modified sugiyama
 #   layout using graphviz. Record the positions of the nodes (maybe edges too?) in the associated
@@ -222,7 +220,6 @@ class ConceptDrawer:
             for node in graph.succ:
                 #for each label, make key, value pairs for nodes
                 sharedlabels = [x for x, y in graph.succ[node].iteritems() if y['label'] == label]
-                #if sharedlabels: print graph.succ[node][sharedlabels[0]]
                 if len(sharedlabels) > 1:
                     #check if all horiz attributes are True
                     if False not in [graph.succ[node][x]['horiz'] == True for x in sharedlabels]:
@@ -235,9 +232,8 @@ class ConceptDrawer:
             for node in graph.pred:
                 #for each label, make key, value pairs for nodes
                 sharedlabels = [x for x, y in graph.pred[node].iteritems() if y['label'] == label]
-                #if sharedlabels: print graph.pred[node][sharedlabels[0]]
                 if len(sharedlabels) > 1:
-                    if False not in [graph.succ[node][x]['horiz'] == True for x in sharedlabels]:
+                    if False not in [graph.pred[node][x]['horiz'] == True for x in sharedlabels]:
                         groupsh.append(sharedlabels)
                     else: 
                         groups.append(sharedlabels)
@@ -250,7 +246,6 @@ class ConceptDrawer:
                 grouped.append(node)
                 groups.append([node])
 
-        #print groups, groupsh
         return groups, groupsh
     
     def addNodeToDotfile(self, node, *args):
@@ -264,7 +259,6 @@ class ConceptDrawer:
         #while iterating through the groups, add all nodes to the dotfile
 
         #this is where the ids should be stripped of spaces
-        #if 'horizontal' in args: print 'BOOP'
         if len(node) == 1:
             nodeit = node[0]
             nodestrip = nodeit.replace(' ','').replace('-','')
@@ -310,18 +304,16 @@ class ConceptDrawer:
 
         for group in groupsh:
             self.addNodeToDotfile(group, 'horizontal')
-
             
         #next, iterate through the successor dict and add all edges to the dotfile, using the
         #property dict to ensure proper edge labels
+        
         for source in graph.succ:
             for target in graph.succ[source]:
-                print graph.succ[source][target]
                 self._dotfile += self._dotnode[source]['id'] + '->'
                 self._dotfile += self._dotnode[target]['id'] +';\n'
                     
         self._dotfile = 'digraph G {\n'+ self._dotfile + '}'
-        #print self._dotfile
 
 
     def _posFromParsedDot(self):
@@ -346,15 +338,19 @@ class ConceptDrawer:
 
                 #split on the '"'
                 names = []
-                horiz = False
+                horizNames = []
                 pos = (0,0)
+                horiz = False
                 ids = []
                 width = 0
                 height = 0
                 current = entry.split('"')
                 for i, split in enumerate(current):
                     if 'pos=' in split: pos = tuple(current[i+1].split(","))
-                    if 'label=' in split: names = current[i+1].split("|")
+                    if 'label=' in split: 
+                        names = current[i+1].split("|")
+                        if True in ['{' in x or '}' in x for x in names]:
+                            horizNames.extend(names)
                     if 'rects=' in split: rects = current[i+1].split(" ")
                     splits = split.split("=")
                     for j, subsplit in enumerate(splits):
@@ -364,10 +360,10 @@ class ConceptDrawer:
                             width = splits[j+1].strip("]")
 
                 if names:
+                    horiz = False
                     for name in names:
                         idtoappend = name.split('>')[1]
-                        print idtoappend
-                        if '{' or '}' in idtoappend:
+                        if name in horizNames:
                             idtoappend = idtoappend.replace('{','').replace('}','')
                             horiz = True
                         ids.append(idtoappend)
@@ -380,22 +376,40 @@ class ConceptDrawer:
                     #get realtive widths and heights
                     ys = [float(x) for x in ','.join(rects).split(',')[1::2]]
                     xs = [float(x) for x in ','.join(rects).split(',')[0::2]]
-                    maxw = abs(xs[-1] - xs[0])
+                    maxw = abs(max(xs) - min(xs))
+                    maxh = abs(max(ys) - min(ys))
 
                     relws = [(xs[i+1] - xs[i]) / maxw for i in range(0, len(xs), 2)]
+                    relhs = [(ys[i+1] - ys[i]) / maxh for i in range(0, len(ys), 2)]
                     widths = [int(width * x) for x in relws]
+                    heights = [int(height * x) for x in relhs]
 
                     #get bottom-left corner
                     corner = (center[0] - width/2, center[1] - height/2)
 
-                    for i, myid in enumerate(ids):
-                        if i > 0:
-                            sumw = sum([widths[j] for j in range(i)])
-                            posd[myid] = {'width': widths[i], 'height':height, 'pos': (
-                                    corner[0] + sumw, corner[1])}
+                    #this whole block, beginning with "if names:", does positioning in chunks
+                    #Therefore we can assume that all nodes in "ids" are all laid out the
+                    #same way (horizontally, vertically) and change the positioning chunk as
+                    #we need it
 
-                        else:
-                            posd[myid] = {'width': widths[i], 'height':height, 'pos': corner}
+                    if not horiz:
+                        for i, myid in enumerate(ids):
+                            if i > 0:
+                                sumw = sum([widths[j] for j in range(i)])
+                                posd[myid] = {'width': widths[i], 'height':height, 'pos': (
+                                        corner[0] + sumw, corner[1])}
+                            else:
+                                posd[myid] = {'width': widths[i], 'height':height, 'pos': corner}
+
+                    #horizontal arrangement
+                    else:
+                        for i, myid in enumerate(ids):
+                            if i > 0:
+                                sumh = sum([heights[j] for j in range(i)])
+                                posd[myid] = {'width': width, 'height':heights[i], 'pos': (
+                                        corner[0], corner[1] + sumh)}
+                            else:
+                                posd[myid] = {'width': width, 'height':heights[i], 'pos': corner}
                 
             #i.e. shape is not record
             else: 
@@ -410,13 +424,12 @@ class ConceptDrawer:
                 pos = tuple([int(float(x)) for x in pos])
                 posd[ids] = {'width':width, 'height':height, 'pos':pos}
                 
-        pp = PrettyPrinter()
-        pp.pprint(posd)
+        #pp = PrettyPrinter()
+        #pp.pprint(posd)
         return posd
 
     def _nameFromDotLabel(self, nodeid):
         for node, item in self._dotnode.items():
-            #print node, item
             if nodeid == item['id']: return item['label']
         return nodeid
 
@@ -434,7 +447,6 @@ class ConceptDrawer:
         posd = {}
         for node, pos in self._pos.items():
             posd[node] = pos['pos']
-        #print posd
         nx.draw(self._dataGraph, pos=posd, node_shape='s', node_size=1200) 
         plt.show()
 
@@ -453,10 +465,7 @@ class ConceptDrawer:
         #to get left bottom corner, subtract half the width from x and half the height from y
         fd = forcescan._pos
         sd = self._pos
-        #print fd
-        #print sd
         for node in sd:
-            #print fd[node]
             width = sd[node]['width']
             height = sd[node]['height']
             sd[node]['pos'] = (fd[node]['center'][0] - int(width/2), fd[node]['center'][1] - int(height/2))
@@ -469,9 +478,9 @@ class ConceptDrawer:
         with open('./dotout.txt', 'w+') as f:
             f.write(self._dotfile)
 
-        #print self._dotfile
         #actually run dot
         self._dotout = check_output(['dot', './dotout.txt'])
+
 
         #write the output of dot for checkin'
         #with open('./conceptDraw.dot','w') as f:
@@ -485,12 +494,12 @@ class ConceptDrawer:
         self.drawplt(nxpos)
 
         #create a forescan class and feed it the position dict we harvested from DOT
-        #d = ForceScan(graph, self._pos)
-        #self._updatePosDict(d)
+        d = ForceScan(graph, self._pos)
+        self._updatePosDict(d)
 
         #plot the graph again
-        #nxpos = self._toPyplot(self._pos)
-        #self.drawplt(nxpos)
+        nxpos = self._toPyplot(self._pos)
+        self.drawplt(nxpos)
 
 if __name__== '__main__':
     inputgraph = './lessons/14-6-7.py'
